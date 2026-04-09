@@ -33,23 +33,22 @@ update_ball :-
 
     adjust_position(TempX, TempY, NewX, NewY),
 
-    % FRICTION
     TempVX is VX * 0.9,
     TempVY is VY * 0.9,
 
     field_size(MaxX, MaxY),
 
-    ( (NewX =< 0.01 ; NewX >= MaxX - 0.01) -> NewVX = 0 ; NewVX = TempVX ),
-    ( (NewY =< 0.01 ; NewY >= MaxY - 0.01) -> NewVY = 0 ; NewVY = TempVY ),
+    % BOUNCE off X walls (negate VX), instead of zeroing it
+    ( (NewX =< 0.01 ; NewX >= MaxX - 0.01) -> NewVX is -TempVX ; NewVX = TempVX ),
+    ( (NewY =< 0.01 ; NewY >= MaxY - 0.01) -> NewVY = 0         ; NewVY = TempVY ),
 
-    ( (NewVX =:= 0, NewVY =:= 0) ->
-        NewPossession = none
+    ( (abs(NewVX) < 0.1, abs(NewVY) < 0.1) ->
+        FinalVX = 0, FinalVY = 0, NewPossession = none
     ;
-        NewPossession = Possession
+        FinalVX = NewVX, FinalVY = NewVY, NewPossession = Possession
     ),
 
-    assertz(ball(NewX, NewY, NewVX, NewVY, NewPossession)),
-    
+    assertz(ball(NewX, NewY, FinalVX, FinalVY, NewPossession)),
     format('Ball moved to: (~w, ~w)~n', [NewX, NewY]),
     check_goal.
 

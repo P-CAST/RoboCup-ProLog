@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.UI;
 
 
 
@@ -24,11 +25,17 @@ public class GameState
 public class PrologClient : MonoBehaviour
 {
 
-    public GameObject ballObject;
+    [SerializeField] GameObject ballPrefab;
+    private GameObject ballObject;
     public GameObject playerPrefab;
     private Dictionary<string, GameObject> playerObjects = new Dictionary<string, GameObject>();
-
-    [SerializeField] float secondsToWaitBeforeNextFrame = 0.6f;
+    Dictionary<string, Vector3> targetPositions = new Dictionary<string, Vector3>();
+    Vector3 ballTarget; // for smooth unity rendering
+    [SerializeField] float secondsToWaitBeforeNextFrame = 0.5f;
+    [SerializeField] Toggle interpolationToggle; // frames/positions of players/ball from prolog will be used to render WITHOUT unity smoothing movement rendering
+    
+    [SerializeField] Sprite teamACharacter;
+    [SerializeField] Sprite teamBCharacter;
     string url = "http://localhost:5000/action";
 
 
@@ -36,6 +43,7 @@ public class PrologClient : MonoBehaviour
     void Start()
     {
         ResetGame();
+        interpolationToggle.isOn = true;
         StartCoroutine(GameLoop());
     }
 
@@ -80,20 +88,81 @@ public class PrologClient : MonoBehaviour
                 SpriteRenderer sr = obj.GetComponent<SpriteRenderer>();
 
                 if (p.team == "teamA")
-                    sr.color = Color.blue;
+                    //sr.color = Color.blue;
+                    sr.sprite = teamACharacter;
                 else
-                    sr.color = Color.red;
+                    //sr.color = Color.red;
+                    sr.sprite = teamBCharacter;
 
                 playerObjects[p.name] = obj;
             }
 
-            playerObjects[p.name].transform.position =
+            if (!interpolationToggle.isOn) // frames/positions of players/ball from prolog will be used to render WITHOUT unity smoothing rendering
+            {
+                playerObjects[p.name].transform.position =
                 new Vector3(p.x / 20f, p.y / 20f, 0);
+            } else  // frames/positions of players/ball from prolog will be used to render WITH unity smoothing rendering
+            {
+                Vector3 target = new Vector3(p.x / 20f, p.y / 20f, 0);
+                targetPositions[p.name] = target;
+            }
+        
         }
+
+        if (ballObject == null)
+        {
+            ballObject = Instantiate(ballPrefab);
+        }
+
 
         Debug.Log("Ball: " + state.ball[0] + ", " + state.ball[1]);
 
-        ballObject.transform.position = new Vector3(state.ball[0] / 20f, state.ball[1] / 20f, 0);
+        if (!interpolationToggle.isOn)
+        {
+            ballObject.transform.position = new Vector3(state.ball[0] / 20f, state.ball[1] / 20f, 0);
+        } else
+        {
+            ballTarget = new Vector3(state.ball[0] / 20f, state.ball[1] / 20f, 0);
+        }
+        
+    }
+
+    // nEw
+    public float moveSpeed = 5f;
+
+    void Update()
+    {
+        foreach (var kvp in playerObjects)
+        {
+            string name = kvp.Key;
+            GameObject obj = kvp.Value;
+
+            if (interpolationToggle.isOn)
+            {
+                if (targetPositions.ContainsKey(name))
+                {
+                    obj.transform.position = Vector3.MoveTowards(
+                        obj.transform.position,
+                        targetPositions[name],
+                        moveSpeed * Time.deltaTime
+                    );
+                }
+            }
+
+            
+        }
+
+        // Move ball with unity help
+        if (interpolationToggle.isOn)
+        {
+            if (ballObject == null) return;
+            ballObject.transform.position = Vector3.MoveTowards(
+                ballObject.transform.position,
+                ballTarget,
+                moveSpeed * Time.deltaTime
+            );
+        }
+        
     }
 
     public void ResetGame()
@@ -102,9 +171,10 @@ public class PrologClient : MonoBehaviour
         {
             Destroy(obj);
         }
+        Destroy(ballObject);
         playerObjects.Clear();
 
-        GameUIManager.Instance.ToggleSettingsPanel();
+        //GameUIManager.Instance.ToggleSettingsPanel();
         StartCoroutine(SendReset());
     }
 
@@ -123,5 +193,15 @@ public class PrologClient : MonoBehaviour
         yield return request.SendWebRequest();
 
         Debug.Log("Game Reset Sent");
+    }
+
+    public void speedUpGame()
+    {
+        secondsToWaitBeforeNextFrame-=0.2f;
+    }
+
+    public void slowDownGame()
+    {
+        secondsToWaitBeforeNextFrame+=0.2f;
     }
 }
