@@ -72,6 +72,7 @@ public class PrologClient : MonoBehaviour
     void Start()
     {
         ResetGame();
+        ShowLogText("Game has started!");
         interpolationToggle.isOn = true;
         StartCoroutine(GameLoop());
     }
@@ -109,12 +110,24 @@ public class PrologClient : MonoBehaviour
         {
             foreach (var ev in state.events)
             {
+                switch (ev.type)
+                {
+                    case "goal":
+                        Debug.Log("GOAL by Team " + ev.team);
+                        ShowLogText("Team " + ev.team +  " scored!");
+                        scoreText.text = state.score.teamA + " - " + state.score.teamB;
+                        break;
+                    case "half_time":
+                        ShowLogText("Half-time!");
+                        break;
+                    case "full_time":
+                        ShowLogText("Full-time! Game Over!");
+                        break;
+                }
+                
                 if (ev.type == "goal")
                 {
-                    Debug.Log("GOAL by Team " + ev.team);
-                    ShowLogText("Team " + ev.team +  " scored!");
-                    LogText.GetComponent<Animator>().Play("Logtext", 0, 0f);
-                    scoreText.text = state.score.teamA + " - " + state.score.teamB;
+                    
 
                 }
             }
@@ -180,6 +193,7 @@ public class PrologClient : MonoBehaviour
 
     private void ShowLogText(string log)
     {
+        LogText.GetComponent<Animator>().Play("Logtext", 0, 0f);
         LogText.GetComponentInChildren<TextMeshProUGUI>().text = log;
     }
 
@@ -235,6 +249,11 @@ public class PrologClient : MonoBehaviour
         Destroy(ballObject);
         playerObjects.Clear();
 
+        scoreText.text = "0 - 0";
+
+        ShowLogText("Game has been reset!");
+
+
         //GameUIManager.Instance.ToggleSettingsPanel();
         StartCoroutine(SendReset());
     }
@@ -258,11 +277,15 @@ public class PrologClient : MonoBehaviour
 
     public void speedUpGame()
     {
-        secondsToWaitBeforeNextFrame-=0.2f;
+        if (secondsToWaitBeforeNextFrame <= 0.11f)
+        {
+            return;
+        }
+        secondsToWaitBeforeNextFrame-=0.1f;
     }
 
     public void slowDownGame()
     {
-        secondsToWaitBeforeNextFrame+=0.2f;
+        secondsToWaitBeforeNextFrame+=0.1f;
     }
 }

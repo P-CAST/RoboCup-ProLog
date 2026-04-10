@@ -15,14 +15,34 @@ handle_action(Request) :-
     process_action(Action, Response),
     reply_json_dict(Response).
 
-% ================================
-% ACTION HANDLER
-% ================================
+
 % Bridge between Unity and your game
 % Unity sends step -> Prolog runs: simulate_half(1,1) -> Then returns: ball position, players, possession
 
+% For half time, full time
+:- dynamic current_time/1.
+current_time(1).
+
 process_action("step", Response) :-
-    with_output_to(string(_), simulate_half(1,1)),  % run one tick
+    current_time(T),
+
+    with_output_to(string(_), simulate_half(T,T)),  % run one tick
+
+    NewT is T + 1,
+    retract(current_time(T)),
+    assertz(current_time(NewT)),
+
+    % Check if halftime/fulltime
+    game_duration(MaxTime),
+    HalfTime is MaxTime // 2,
+
+    (NewT =:= HalfTime ->
+        log_event(event{type:"half_time"})
+    ; true),
+
+    (NewT =:= MaxTime ->
+        log_event(event{type:"full_time"})
+    ; true),
 
     % get ball
     ball(X, Y, VX, VY, Possession),
@@ -47,6 +67,7 @@ process_action("step", Response) :-
 
 process_action("reset", Response) :-
     reset_players_ball,
+    reset_score,
     build_game_state(Response).
 
 

@@ -1,5 +1,5 @@
 field_size(200, 120).
-goal_width(14).
+goal_width(20).
 game_duration(200). % Total game time in ticks 
 
 % Logs: For game events logging in unity
@@ -240,7 +240,7 @@ reset_players_ball :-
          assertz(player(Team, Player, Pos, 80, InitX, InitY)))).
 
 % Goalkeeper save
-save_radius(5).  % Goalkeeper can save the ball if it's within 8 units
+save_radius(5).  % Goalkeeper can save the ball if it's within 5 units
 
 attempt_save(Goalkeeper) :-
     player(Team, Goalkeeper, goalkeeper, Stam, PX, PY),
@@ -332,9 +332,11 @@ simulate_game :-
     simulate_half(1, HalfTime),
     reset_players_ball,
     write('Half-time! Players rest and recover.'), nl,
+    log_event(event{type:"half_time"}),
     recover_all_players,
     simulate_half(HalfTime, MaxTime),
     write('Full-time! Game over.'), nl,
+    log_event(event{type:"full_time"}),
     display_final_score.
 
 simulate_half(Time, MaxTime) :- 
@@ -383,3 +385,7 @@ display_final_score :-
     format('Final Score: Team A ~w - Team B ~w~n', [ScoreA, ScoreB]).
 
 
+reset_score :-
+    retractall(score(_, _)),
+    assertz(score(teamA, 0)),
+    assertz(score(teamB, 0)).

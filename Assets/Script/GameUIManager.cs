@@ -26,6 +26,7 @@ public class GameUIManager : MonoBehaviour
     [SerializeField] GameObject settingsPanel;
     [SerializeField] GameObject scorePanel;
     [SerializeField] TextMeshProUGUI errorMessageText;
+    [SerializeField] AudioSource music;
 
     void Start()
     {
@@ -36,9 +37,15 @@ public class GameUIManager : MonoBehaviour
         settingsPanel.SetActive(!settingsPanel.activeSelf);
     }
 
-    public void ToggleScorePanel()
+    public void ToggleMusic()
     {
-        scorePanel.SetActive(!scorePanel.activeSelf);
+        if (music.isPlaying)
+        {
+            music.Pause();
+        } else
+        {
+            music.Play();
+        }
     }
 
     public void DisplayErrorMessage(string errorText)
