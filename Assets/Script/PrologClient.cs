@@ -64,7 +64,7 @@ public class PrologClient : MonoBehaviour
     [SerializeField] Sprite teamACharacter;
     [SerializeField] Sprite teamBCharacter;
     [SerializeField] TextMeshProUGUI scoreText;
-    [SerializeField] TextMeshProUGUI LogText;
+    [SerializeField] GameObject LogText;
     string url = "http://localhost:5000/action";
 
 
@@ -112,8 +112,10 @@ public class PrologClient : MonoBehaviour
                 if (ev.type == "goal")
                 {
                     Debug.Log("GOAL by Team " + ev.team);
-                    ShowLogText("GOAL! Team " + ev.team);
+                    ShowLogText("Team " + ev.team +  " scored!");
+                    LogText.GetComponent<Animator>().Play("Logtext", 0, 0f);
                     scoreText.text = state.score.teamA + " - " + state.score.teamB;
+
                 }
             }
         }
@@ -176,9 +178,9 @@ public class PrologClient : MonoBehaviour
         
     }
 
-    private void ShowLogText(string v)
+    private void ShowLogText(string log)
     {
-        
+        LogText.GetComponentInChildren<TextMeshProUGUI>().text = log;
     }
 
     // private void ShowGoalUI(string team)
