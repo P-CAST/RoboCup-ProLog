@@ -1,8 +1,8 @@
 field_size(200, 120).
-goal_width(20).
-game_duration(200). % Total game time in ticks 
+goal_width(25).
+game_duration(350). % game time (ticks)
 
-% Logs: For game events logging in unity
+% for the logtext in unity UI
 :- dynamic game_event/1.
 
 log_event(Event) :-
@@ -12,13 +12,13 @@ collect_events(Events) :-
     findall(E, game_event(E), Events),
     retractall(game_event(_)).
 
-% Ball state: ball(X, Y, VX, VY, Possession).
+% ball state which is ball(X, Y, VX, VY, Possession).
 :- dynamic ball/5.
 
-% Edit: start ball at player6A
+% start ball at player6A
 ball(100, 60, 0, 0, player_6A).
 
-% Ensure the ball stays within bounds
+% makes the ball stay within the bounds of field
 adjust_position(X, Y, NewX, NewY) :-
     (Y < 0 -> NewY = 0;
     Y > 120 -> NewY = 120;
@@ -26,15 +26,15 @@ adjust_position(X, Y, NewX, NewY) :-
     field_size(MaxX, _),
     NewX is min(max(X, 0), MaxX).
 
-% Update ball position
-% Case 1: Ball is stopped → do nothing
+% update ball position based on 2 cases:
+% Case 1: Ball is stopped: do nothing
 update_ball :-
     ball(_, _, VX, VY, _),
     VX =:= 0,
     VY =:= 0,
     !.
 
-% Case 2: Ball is moving → update
+% Case 2: Ball is moving: update
 update_ball :-
     retract(ball(X, Y, VX, VY, Possession)),
 
@@ -48,7 +48,7 @@ update_ball :-
 
     field_size(MaxX, MaxY),
 
-    % BOUNCE off X walls (negate VX), instead of zeroing it
+    % when bounce off X walls --> negate velocity X 
     ( (NewX =< 0.01 ; NewX >= MaxX - 0.01) -> NewVX is -TempVX ; NewVX = TempVX ),
     ( (NewY =< 0.01 ; NewY >= MaxY - 0.01) -> NewVY = 0         ; NewVY = TempVY ),
 
@@ -59,31 +59,32 @@ update_ball :-
     ),
 
     assertz(ball(NewX, NewY, FinalVX, FinalVY, NewPossession)),
-    format('Ball moved to: (~w, ~w)~n', [NewX, NewY]),
+    format('Ball has been moved to position: (~w, ~w)~n', [NewX, NewY]),
     check_goal.
 
 
 kick_direction(Team, Direction) :-
-    % Team 'A' kicks toward right (up front) and 'B' toward left
+    % Team A kicks towards right  and B toward left
     (Team = teamA -> Direction = right; Direction = left).
 
-% Main kick action
+% The players kick action
 kick(Player) :-
     player(Team,Player,Position,Stamina,_,_),
-    % Determine the direction of the kick
+    
     kick_direction(Team, Direction),
-    % Set the ball velocity
-    (Direction = left -> NewVX is -5-Stamina/10; NewVX is 5+Stamina/10),  % Left means negative X velocity (towards the opponent goal)
+    
+    % set ball velocity
+    (Direction = left -> NewVX is -5-Stamina/10; NewVX is 5+Stamina/10),  % in this case: left means negative X velocity (so towards the opponent goal)
     (Position = midfielder->random_between(-10,10,R); random_between(-20,20,R)),
 	NewVY is R,  % Keep Y velocity constant (no vertical movement)
 	retract(ball(X, Y, _,_,_)),
     assertz(ball(X, Y, NewVX, NewVY, none)),
     format('Player ~w kicks the ball ~w as a ~w~n', [Player, Direction,Position]),
-    update_ball. % Update the ball’s position after the kick
+    update_ball. 
 
 
 
-% Player definitions
+% player defs
 :- dynamic player/6.
 player(teamA, player_1A, goalkeeper, 80, 10, 60).
 player(teamA, player_2A, defender, 80, 45, 20).
@@ -108,7 +109,7 @@ player(teamB, player_9B, forward, 80, 50, 30).
 player(teamB, player_10B, forward, 80, 50, 60).
 player(teamB, player_11B, forward, 80, 50, 90).
 
-% Define initial positions for players
+% define init. positions for all players
 init_pos(teamA, player_1A, 10, 60).
 init_pos(teamA, player_2A, 45, 20).
 init_pos(teamA, player_3A, 45, 40).
@@ -132,7 +133,7 @@ init_pos(teamB, player_9B, 50, 30).
 init_pos(teamB, player_10B, 50, 60).
 init_pos(teamB, player_11B, 50, 90).
 
-% Players who can intercept the ball
+% players who can intercept the ball
 intercept_radius(forward, 2).
 intercept_radius(midfielder, 3).
 intercept_radius(defender, 5).
@@ -142,13 +143,13 @@ distance(X1, Y1, X2, Y2, Dist) :-
     DY is Y2 - Y1,
     Dist is sqrt(DX*DX + DY*DY).
 
-% Goal detection with goalkeeper save attempt and correct goal assignment
+% detecting goals with goalkeeper save logic + correct scoring assignment
 check_goal :- 
     ball(BallX, BallY, _, _, _),
     field_size(FieldLength, FieldWidth),
     goal_width(GoalWidth),
     
-    % Check if the ball is in the scoring range for Team A (right side of the field)
+    % check if the ball is in the scoring range for Team A (this is the right side)
     ( BallX >= FieldLength, abs(BallY - (FieldWidth / 2)) =< (GoalWidth / 2) -> 
         % Attempt save for Team B goalkeeper
         player(teamB, Goalkeeper, goalkeeper, _, GKX, GKY),
@@ -180,11 +181,11 @@ check_goal :-
       true
     ).
 
-% Define player speed based on stamina (simple linear scaling)
+% player speed based on stamina\
 speed(Stamina, Speed) :-
-    Speed is 15+Stamina / 10. % Example scaling factor: 10 stamina = 1 speed unit.
+    Speed is 15+Stamina / 10. % Ex: 10 stamina = 1 speed unit.
 
-% Define how far the player moves in one step toward the ball (proportional to speed)
+% how far the player moves in one step toward the ball
 move_step(PX, PY, FutureX, FutureY, Speed, NewX, NewY) :-
     % Calculate direction vector (dx, dy) to the future ball position
     DX is FutureX - PX,
@@ -358,27 +359,28 @@ simulate_half(Time, MaxTime) :-
             move_to_intercept(Player)   % Move players toward the ball
         ; true)
     ),
+
     % If a player has possession, simulate the kick
     % Prevents infinite kicking as well
     ball(_, _, VX, VY, Possession), 
     (Possession \= none, VX =:= 0, VY =:= 0 -> 
         kick(Possession)
     ; true),
-    % Check if a goal is scored
+
     check_goal,
-    % Recover stamina for all players
     recover_all_players,
-    % Update the game time and continue simulation
+
+    % update the game time + continue simulation
     NewTime is Time + 1,
     simulate_half(NewTime, MaxTime).  % Continue with the next time step
 
 simulate_half(Time, MaxTime) :-
-    % If max time is reached, stop and finalize the game
+    % when max time, finalize game
     Time > MaxTime,
     !.  % Cut to stop further recursion once the game time is over
 
 
-% Display final score
+
 display_final_score :-
     score(teamA, ScoreA),
     score(teamB, ScoreB),

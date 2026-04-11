@@ -41,3 +41,9 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: Ball
+    uniqueID: 2057180011
+    locked: 0
+  - name: Players
+    uniqueID: 586801533
+    locked: 0

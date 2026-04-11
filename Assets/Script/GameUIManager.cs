@@ -2,11 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class GameUIManager : MonoBehaviour
 {
 
-    // Singleton code
+    // for singleton
     public static GameUIManager Instance { get; private set; }
 
     private void Awake()
@@ -19,37 +20,39 @@ public class GameUIManager : MonoBehaviour
 
         Instance = this;
         
-        // Optional: Keep this object alive across scene loads
         DontDestroyOnLoad(gameObject); 
-    }
+    }  
+    private GameUIRef ui;
 
-    [SerializeField] GameObject settingsPanel;
-    [SerializeField] GameObject scorePanel;
-    [SerializeField] TextMeshProUGUI errorMessageText;
-    [SerializeField] AudioSource music;
-
-    void Start()
+    public void SetUI(GameUIRef uiRefs)
     {
-        settingsPanel.SetActive(false);
+        ui = uiRefs;
+
+        ui.settingsPanel.SetActive(false);
+
+        ui.settingsButton.onClick.RemoveAllListeners();
+        ui.settingsButton.onClick.AddListener(ToggleSettingsPanel);
     }
+
     public void ToggleSettingsPanel()
     {
-        settingsPanel.SetActive(!settingsPanel.activeSelf);
+        ui.settingsPanel.SetActive(!ui.settingsPanel.activeSelf);
     }
 
     public void ToggleMusic()
     {
-        if (music.isPlaying)
+        if (ui.gameMusicAudio.isPlaying)
         {
-            music.Pause();
+            ui.gameMusicAudio.Pause();
         } else
         {
-            music.Play();
+            ui.gameMusicAudio.Play();
         }
     }
 
     public void DisplayErrorMessage(string errorText)
     {
-        errorMessageText.text = errorText;
+        ui.errorMessageText.text = errorText;
     }
+
 }

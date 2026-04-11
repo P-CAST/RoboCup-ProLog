@@ -2,7 +2,7 @@
 :- use_module(library(http/http_dispatch)).
 :- use_module(library(http/http_json)).
 
-:- consult('game.pl').  % <-- your existing file
+:- consult('game.pl').  
 
 :- http_handler(root(action), handle_action, []).
 
@@ -16,8 +16,8 @@ handle_action(Request) :-
     reply_json_dict(Response).
 
 
-% Bridge between Unity and your game
-% Unity sends step -> Prolog runs: simulate_half(1,1) -> Then returns: ball position, players, possession
+
+% unity sends step so prolog runs: simulate_half(1,1) which will return the ball position, players, possession
 
 % For half time, full time
 :- dynamic current_time/1.
@@ -26,13 +26,13 @@ current_time(1).
 process_action("step", Response) :-
     current_time(T),
 
-    with_output_to(string(_), simulate_half(T,T)),  % run one tick
+    with_output_to(string(_), simulate_half(T,T)),  
 
     NewT is T + 1,
     retract(current_time(T)),
     assertz(current_time(NewT)),
 
-    % Check if halftime/fulltime
+    % check if halftime/fulltime already
     game_duration(MaxTime),
     HalfTime is MaxTime // 2,
 
@@ -68,6 +68,9 @@ process_action("step", Response) :-
 process_action("reset", Response) :-
     reset_players_ball,
     reset_score,
+    retractall(current_time(_)),
+    assertz(current_time(1)),
+    retractall(game_event(_)),
     build_game_state(Response).
 
 

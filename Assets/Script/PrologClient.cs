@@ -58,14 +58,16 @@ public class PrologClient : MonoBehaviour
     private Dictionary<string, GameObject> playerObjects = new Dictionary<string, GameObject>();
     Dictionary<string, Vector3> targetPositions = new Dictionary<string, Vector3>();
     Vector3 ballTarget; // for smooth unity rendering
-    [SerializeField] float secondsToWaitBeforeNextFrame = 0.5f;
+    [SerializeField] float secondsToWaitBeforeNextFrame = 0.4f;
     [SerializeField] Toggle interpolationToggle; // frames/positions of players/ball from prolog will be used to render WITHOUT unity smoothing movement rendering
 
     [SerializeField] Sprite teamACharacter;
     [SerializeField] Sprite teamBCharacter;
     [SerializeField] TextMeshProUGUI scoreText;
     [SerializeField] GameObject LogText;
+    [SerializeField] GameObject gameOverPanel;
     string url = "http://localhost:5000/action";
+    bool gameOver = false;
 
 
 
@@ -74,12 +76,12 @@ public class PrologClient : MonoBehaviour
         ResetGame();
         ShowLogText("Game has started!");
         interpolationToggle.isOn = true;
-        StartCoroutine(GameLoop());
+        // StartCoroutine(GameLoop());
     }
 
     IEnumerator GameLoop()
     {
-        while(true)
+        while(!gameOver)
         {
             yield return SendStep();
             yield return new WaitForSeconds(secondsToWaitBeforeNextFrame);
@@ -102,9 +104,15 @@ public class PrologClient : MonoBehaviour
 
         string responseText = request.downloadHandler.text;
 
-        Debug.Log(responseText);
 
         GameState state = JsonUtility.FromJson<GameState>(responseText);
+
+        if (state == null) {
+            GameUIManager.Instance.DisplayErrorMessage("Error: Prolog Server Not Initialized!");
+        } else
+        {
+            GameUIManager.Instance.DisplayErrorMessage("");
+        }
 
         if (state.events != null)
         {
@@ -113,7 +121,7 @@ public class PrologClient : MonoBehaviour
                 switch (ev.type)
                 {
                     case "goal":
-                        Debug.Log("GOAL by Team " + ev.team);
+                        //Debug.Log("GOAL by Team " + ev.team);
                         ShowLogText("Team " + ev.team +  " scored!");
                         scoreText.text = state.score.teamA + " - " + state.score.teamB;
                         break;
@@ -122,25 +130,28 @@ public class PrologClient : MonoBehaviour
                         break;
                     case "full_time":
                         ShowLogText("Full-time! Game Over!");
+                        gameOver = true;
+
+                        if (gameLoopCoroutine != null)
+                        {
+                            StopCoroutine(gameLoopCoroutine);
+                        }
+
+                        ShowGameOverUI(state.score.teamA, state.score.teamB);
                         break;
                 }
                 
-                if (ev.type == "goal")
-                {
-                    
-
-                }
+        
             }
         }
 
 
         if (state == null)
         {
-            Debug.LogError("Error: Prolog Server Not Initiailized!");
+            //Debug.LogError("Error: Prolog Server Not Initiailized!");
             GameUIManager.Instance.DisplayErrorMessage("Error: Prolog Server Not Initiailized!");
         }
 
-        //Debug.Log("Ball X: " + state.ball[0]);
 
         foreach (var p in state.players)
         {
@@ -151,10 +162,8 @@ public class PrologClient : MonoBehaviour
                 SpriteRenderer sr = obj.GetComponent<SpriteRenderer>();
 
                 if (p.team == "teamA")
-                    //sr.color = Color.blue;
                     sr.sprite = teamACharacter;
                 else
-                    //sr.color = Color.red;
                     sr.sprite = teamBCharacter;
 
                 playerObjects[p.name] = obj;
@@ -178,8 +187,7 @@ public class PrologClient : MonoBehaviour
         }
 
 
-        //Debug.Log("Ball: " + state.ball[0] + ", " + state.ball[1]);
-        Debug.Log("Ball: " + state.ball.x + ", " + state.ball.y);
+        //Debug.Log("Ball: " + state.ball.x + ", " + state.ball.y);
 
         if (!interpolationToggle.isOn)
         {
@@ -191,18 +199,22 @@ public class PrologClient : MonoBehaviour
         
     }
 
+    private void ShowGameOverUI(int scoreA, int scoreB)
+    {
+        gameOverPanel.SetActive(true);
+        FulltimePanelManager manager = gameOverPanel.GetComponent<FulltimePanelManager>();
+        manager.setTeamAScore(scoreA);
+        manager.setTeamBScore(scoreB);
+        
+    }
+
     private void ShowLogText(string log)
     {
         LogText.GetComponent<Animator>().Play("Logtext", 0, 0f);
         LogText.GetComponentInChildren<TextMeshProUGUI>().text = log;
     }
 
-    // private void ShowGoalUI(string team)
-    // {
-    //     score
-    // }
 
-    // nEw
     public float moveSpeed = 5f;
 
     void Update()
@@ -237,11 +249,18 @@ public class PrologClient : MonoBehaviour
                 moveSpeed * Time.deltaTime
             );
         }
+
         
     }
 
+    Coroutine gameLoopCoroutine;
+
     public void ResetGame()
     {
+        //if (gameOver) return;
+        scoreText.text = "0 - 0";
+        gameOver = false;
+        gameOverPanel.SetActive(false);
         foreach (var obj in playerObjects.Values)
         {
             Destroy(obj);
@@ -249,9 +268,13 @@ public class PrologClient : MonoBehaviour
         Destroy(ballObject);
         playerObjects.Clear();
 
-        scoreText.text = "0 - 0";
 
         ShowLogText("Game has been reset!");
+
+        if (gameLoopCoroutine != null)
+        {
+            StopCoroutine(gameLoopCoroutine);
+        }
 
 
         //GameUIManager.Instance.ToggleSettingsPanel();
@@ -272,20 +295,24 @@ public class PrologClient : MonoBehaviour
 
         yield return request.SendWebRequest();
 
-        Debug.Log("Game Reset Sent");
+        gameLoopCoroutine = StartCoroutine(GameLoop());
     }
 
     public void speedUpGame()
     {
-        if (secondsToWaitBeforeNextFrame <= 0.11f)
+        if (secondsToWaitBeforeNextFrame <= 0.21f)
         {
             return;
         }
-        secondsToWaitBeforeNextFrame-=0.1f;
+        secondsToWaitBeforeNextFrame-=0.2f;
     }
 
     public void slowDownGame()
     {
-        secondsToWaitBeforeNextFrame+=0.1f;
+        if (secondsToWaitBeforeNextFrame >= 0.59f)
+        {
+            return;
+        }
+        secondsToWaitBeforeNextFrame+=0.2f;
     }
 }
