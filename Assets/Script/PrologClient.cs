@@ -254,6 +254,27 @@ public class PrologClient : MonoBehaviour
     }
 
     Coroutine gameLoopCoroutine;
+    bool paused = false;
+
+    public void PauseGame()
+    {
+        if (paused || gameOver) return;
+        paused = true;
+        if (gameLoopCoroutine != null)
+        {
+            StopCoroutine(gameLoopCoroutine);
+            gameLoopCoroutine = null;
+        }
+    }
+
+    public void ResumeGame()
+    {
+        if (!paused || gameOver) return;
+        paused = false;
+        gameLoopCoroutine = StartCoroutine(GameLoop());
+    }
+
+    public bool IsPaused() => paused;
 
     public void ResetGame()
     {
