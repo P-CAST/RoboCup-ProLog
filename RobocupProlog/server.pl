@@ -2,7 +2,7 @@
 :- use_module(library(http/http_dispatch)).
 :- use_module(library(http/http_json)).
 
-:- consult('game.pl').  
+:- consult('game.pl').
 
 :- http_handler(root(action), handle_action, []).
 
@@ -12,66 +12,53 @@ start_server :-
 handle_action(Request) :-
     http_read_json_dict(Request, Dict),
     Action = Dict.get(action),
-    process_action(Action, Response),
-    reply_json_dict(Response).
+    ( process_action(Action, Dict, Response)
+    ; process_action(Action, Response)
+    ),
+    !,
+    reply_json_dict(Response),
+    clear_events.
 
-
-
-% unity sends step so prolog runs: simulate_half(1,1) which will return the ball position, players, possession
-
-% For half time, full time
-:- dynamic current_time/1.
-current_time(1).
-
+% ============== STEP ==============
 process_action("step", Response) :-
-    current_time(T),
-
-    with_output_to(string(_), simulate_half(T,T)),  
-
-    NewT is T + 1,
-    retract(current_time(T)),
-    assertz(current_time(NewT)),
-
-    % check if halftime/fulltime already
-    game_duration(MaxTime),
-    HalfTime is MaxTime // 2,
-
-    (NewT =:= HalfTime ->
-        log_event(event{type:"half_time"})
-    ; true),
-
-    (NewT =:= MaxTime ->
-        log_event(event{type:"full_time"})
-    ; true),
-
-    % get ball
-    ball(X, Y, VX, VY, Possession),
-
-    % get players
-    findall(_{name: Name, team: Team, x: PX, y: PY},
-        player(Team, Name, _, _, PX, PY),
-        Players),
-    
-    collect_events(Events),
-
-    score(teamA, ScoreA),
-    score(teamB, ScoreB),
-
-    Response = _{
-        ball: _{x:X, y:Y, vx:VX, vy:VY},
-        possession: Possession,
-        players: Players,
-        events: Events,
-        score: _{teamA: ScoreA, teamB: ScoreB}
-    }.
-
-process_action("reset", Response) :-
-    reset_players_ball,
-    reset_score,
-    retractall(current_time(_)),
-    assertz(current_time(1)),
-    retractall(game_event(_)),
+    current_state(State),
+    ( terminal(State) ->
+        true
+    ;
+        current_team(State, Team),
+        choose_action(State, Team, Action),
+        apply_action(State, Team, Action, NewState),
+        store_state(NewState),
+        emit_events(State, NewState)
+    ),
     build_game_state(Response).
 
+% ============== RESET ==============
+process_action("reset", Response) :-
+    init_live_state,
+    build_game_state(Response).
 
+% ============== SET MODE ==============
+process_action("set_mode", Dict, _{status: "ok"}) :-
+    Mode = Dict.get(mode),
+    retractall(game_mode(_)),
+    ( (Mode == "ai_vs_ai" ; Mode == ai_vs_ai) ->
+        assertz(game_mode(ai_vs_ai))
+    ; (Mode == "slider_vs_ai" ; Mode == slider_vs_ai) ->
+        assertz(game_mode(slider_vs_ai))
+    ;
+        assertz(game_mode(ai_vs_ai))
+    ).
 
+% ============== SET STRATEGY ==============
+process_action("set_strategy", Dict, _{status: "ok"}) :-
+    TeamStr = Dict.get(team),
+    Agg     = Dict.get(aggression),
+    ( (TeamStr == "teamA" ; TeamStr == teamA) -> T = teamA
+    ; (TeamStr == "teamB" ; TeamStr == teamB) -> T = teamB
+    ; T = teamA
+    ),
+    retractall(strategy_aggression(T, _)),
+    assertz(strategy_aggression(T, Agg)).
+
+:- initialization(init_live_state).
