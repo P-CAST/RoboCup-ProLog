@@ -1139,6 +1139,7 @@ ordered_team_actions(Team, State, Ordered) :-
     findall(act(DA, FA),
         (   member(DA, DefActions),
             member(FA, FwdActions),
+            \+ (DA == contest, FA == contest),
             once(apply_team_actions(Team, act(DA, FA), State, _))
         ),
         AllActs),
