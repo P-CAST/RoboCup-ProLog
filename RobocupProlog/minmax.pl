@@ -24,7 +24,7 @@ initial_state_second_half(ScoreA-ScoreB, State) :-
 % players 1A, 1B are defender and players 2A, 2B are forward 
 % GA is goal for team A which is at col 0 and rows 2-3
 % GB is goal for team B which is at col 9 and rows 2-3
-%  ball is shown as lowercase suffix on possessor cell: Example: "2A*" means player_2A has the ball
+% ball is shown as lowercase suffix on possessor cell: Example: "2A*" means player_2A has the ball
 
 
 display_state(State) :-
@@ -164,15 +164,6 @@ nearest_goal_cell(Player, Col, Row, GCol, GRow) :-
         Pairs),
     min_member(_-goal(GCol,GRow), Pairs).
 
-% ------------------------------------------------------------
-%  SHOOT PATH CLEAR?
-%
-%  Shooter is on the same row as the goal cell (rows 2-3).
-%  Path cells: all cells strictly between shooter col
-%  and goal col on the same row.
-%  Blocked if any opponent occupies a path cell OR the goal
-%  cell itself.
-% ------------------------------------------------------------
 
 shoot_path_clear(Player, Col, Row, GCol, GRow, State) :-
     Row =:= GRow,                        % must be same row
@@ -185,7 +176,6 @@ shoot_path_clear(Player, Col, Row, GCol, GRow, State) :-
         (member(OC, PathCols) ; OC =:= GCol)
     ).
 
-%  Columns strictly between C1 and C2 (exclusive).
 path_cols(C1, C2, Cols) :-
     C1 < C2, !,
     Lo is C1 + 1, Hi is C2 - 1,
@@ -195,12 +185,6 @@ path_cols(C1, C2, Cols) :-
     Lo is C2 + 1, Hi is C1 - 1,
     (Lo > Hi -> Cols = [] ; numlist(Lo, Hi, Cols)).
 
-% ------------------------------------------------------------
-%  PASS PATH: first intercepting opponent (closest to passer).
-%
-%  Returns intercepted(OppAtom) or clear.
-%  Requires passer and teammate on same row or same col.
-% ------------------------------------------------------------
 
 pass_result(Player, State, TMRole, Result) :-
     player_data(Player, State, p(_, PC, PR, _)),
@@ -221,8 +205,7 @@ pass_result(Player, State, TMRole, Result) :-
         Result = intercepted(First)
     ).
 
-%  Is (OC, OR) strictly between (PC,PR) and (TC,TR)
-%  on a shared row or column?
+%  is (OC, OR) strictly between (PC,PR) and (TC,TR) on a shared row or column
 on_pass_path(PC, PR, TC, PR, OC, OR) :-   % same row
     OR =:= PR,
     strictly_between(PC, TC, OC).
@@ -233,11 +216,8 @@ on_pass_path(PC, PR, PC, TR, OC, OR) :-   % same col
 strictly_between(A, B, X) :-
     ( A < B -> X > A, X < B ; X > B, X < A ).
 
-% ============================================================
-%  LEGAL ACTION CHECK:  legal_action(+Player, +Action, +State)
-% ============================================================
-
-%  ---- move(Dir) ----
+% check if legal direction
+% move(Dir)
 legal_action(Player, move(Dir), State) :-
     dir_delta(Dir, DC, DR),
     player_data(Player, State, p(_, Col, Row, Stamina)),
@@ -248,10 +228,10 @@ legal_action(Player, move(Dir), State) :-
     move_cost(Player, State, Cost),
     Stamina >= Cost.
 
-%  ---- hold ----
+% hold
 legal_action(_Player, hold, _State).
 
-%  ---- contest ----
+% contest
 legal_action(Player, contest, State) :-
     player_data(Player, State, p(_, Col, Row, Stamina)),
     Stamina >= 15,
@@ -262,7 +242,7 @@ legal_action(Player, contest, State) :-
     player_data(BallHolder, State, p(_, BC, BR, _)),
     adjacent(Col, Row, BC, BR).
 
-%  ---- shoot ----
+% shoot
 legal_action(Player, shoot, State) :-
     State = state(_, _, _, _, ball(_, _, Player)),  % must possess
     player_data(Player, State, p(_, Col, Row, Stamina)),
@@ -272,28 +252,20 @@ legal_action(Player, shoot, State) :-
     Dist =< 4,
     shoot_path_clear(Player, Col, Row, GCol, GRow, State).
 
-%  ---- pass(Role) ----
+% pass(Role)
 legal_action(Player, pass(TMRole), State) :-
     State = state(_, _, _, _, ball(_, _, Player)),  % must possess
     player_data(Player, State, p(_, _, _, Stamina)),
     Stamina >= 5,
     teammate_role(Player, TMRole),
-    pass_result(Player, State, TMRole, _).          % path exists
+    pass_result(Player, State, TMRole, _).  % path exists
 
-% ------------------------------------------------------------
-%  HELPER: is a teammate on a given cell?
-% ------------------------------------------------------------
-
+%  check if a teammate on a given cell?
 teammate_on_cell(Player, Col, Row, State) :-
     teammate(Player, TM),
     player_data(TM, State, p(_, Col, Row, _)).
 
-% ============================================================
-%  ALL LEGAL ACTIONS FOR A PLAYER
-%  legal_actions(+Player, +State, -ActionList)
-% ============================================================
 
-% Replace the broken legal_actions/3 and all_candidate_actions/3:
 
 legal_actions(Player, State, Actions) :-
     all_candidate_actions(Player, Actions_candidates),
@@ -314,27 +286,10 @@ all_candidate_actions(Player, Candidates) :-
         pass(TMRole)
     ].
 
-% ------------------------------------------------------------
-%  QUICK TEST
-%  ?- initial_state_first_half(S),
-%     legal_actions(player_2A, S, As),
-%     write(As).
-% ------------------------------------------------------------
 
 
-% ============================================================
-%  Step 3: apply_team_actions/3
-%  apply_team_actions(+Team, +TeamActions, +State, -NewState)
-%
-%  TeamActions = act(ActionForDefender, ActionForForward)
-%  Team = a | b
-%
-%  Order of operations per team turn:
-%  1. Resolve simultaneous move conflict (same target cell)
-%  2. Apply defender action
-%  3. Apply forward action
-%  4. Check goal scored
-% ============================================================
+%  order of operations per team turn: 1. resolve simultaneous move conflict which is when it same target cell 2. Apply defender action
+%  then apply forward action  3. Check goal scored
 
 apply_team_actions(Team, act(DefAct, FwdAct), State, NewState) :-
     resolve_conflict(Team, DefAct, FwdAct, State, ResolvedDef, ResolvedFwd),
@@ -342,14 +297,7 @@ apply_team_actions(Team, act(DefAct, FwdAct), State, NewState) :-
     apply_player_action(Team, forward,  ResolvedFwd, State1, State2),
     check_goal(State2, NewState).
 
-% ------------------------------------------------------------
-%  CONFLICT RESOLUTION
-%  If both players target the same cell via move, forward's
-%  move is replaced with hold (but stamina cost still paid).
-%  We model "wasted effort" by using a special hold_penalised
-%  internal action that deducts the move cost but doesn't move.
-% ------------------------------------------------------------
-
+% resolve conflict in order of operations
 resolve_conflict(Team, move(DDir), move(FDir), State,
                  move(DDir), hold_penalised(FCost)) :-
     player_atoms(Team, DefAtom, FwdAtom),
@@ -365,19 +313,10 @@ resolve_conflict(Team, move(DDir), move(FDir), State,
 
 resolve_conflict(_, DefAct, FwdAct, _, DefAct, FwdAct).
 
-% ------------------------------------------------------------
-%  PLAYER ATOMS FOR A TEAM
-% ------------------------------------------------------------
 
 player_atoms(a, player_1A, player_2A).
 player_atoms(b, player_1B, player_2B).
 
-% ------------------------------------------------------------
-%  APPLY A SINGLE PLAYER ACTION
-%  apply_player_action(+Team, +Role, +Action, +State, -NewState)
-% ------------------------------------------------------------
-
-%  ---- move(Dir) ----
 apply_player_action(Team, Role, move(Dir), State, NewState) :-
     player_atoms(Team, DefAtom, FwdAtom),
     (Role = defender -> Atom = DefAtom ; Atom = FwdAtom),
@@ -397,7 +336,7 @@ apply_player_action(Team, Role, move(Dir), State, NewState) :-
     TempState = state(T, Score, PA2, PB2, _),
     NewState = state(T, Score, PA2, PB2, NewBall).
 
-%  ---- hold ----
+% hold
 apply_player_action(Team, Role, hold, State, NewState) :-
     player_atoms(Team, DefAtom, FwdAtom),
     (Role = defender -> Atom = DefAtom ; Atom = FwdAtom),
@@ -406,7 +345,6 @@ apply_player_action(Team, Role, hold, State, NewState) :-
     update_player(Team, Role, p(Role, Col, Row, NewStamina),
                   State, NewState).
 
-%  ---- hold_penalised(Cost) ---- (forward wasted effort)
 apply_player_action(Team, forward, hold_penalised(Cost), State, NewState) :-
     player_atoms(Team, _, FwdAtom),
     player_data(FwdAtom, State, p(forward, Col, Row, Stamina)),
@@ -414,7 +352,7 @@ apply_player_action(Team, forward, hold_penalised(Cost), State, NewState) :-
     update_player(Team, forward, p(forward, Col, Row, NewStamina),
                   State, NewState).
 
-%  ---- contest ----
+% contest
 apply_player_action(Team, Role, contest, State, NewState) :-
     player_atoms(Team, DefAtom, FwdAtom),
     (Role = defender -> Atom = DefAtom ; Atom = FwdAtom),
@@ -432,17 +370,19 @@ apply_player_action(Team, Role, contest, State, NewState) :-
     ;   % tie — defender wins
         (role(Atom, defender) -> Winner = Atom ; Winner = OppAtom)
     ),
+    
     % update staminas
     update_player(Team, Role,
                   p(Role, Col, Row, NewStamina), State, S1),
     opponent_team(Team, OppTeam),
     update_player(OppTeam, OppRole,
                   p(OppRole, OC, OR, NewOppStamina), S1, S2),
+    
     % transfer ball if contestant wins
     S2 = state(T, Score, PA2, PB2, ball(BC, BR, _)),
     NewState = state(T, Score, PA2, PB2, ball(BC, BR, Winner)).
 
-%  ---- shoot ----
+% shoot
 apply_player_action(Team, Role, shoot, State, NewState) :-
     player_atoms(Team, DefAtom, FwdAtom),
     (Role = defender -> Atom = DefAtom ; Atom = FwdAtom),
@@ -452,11 +392,12 @@ apply_player_action(Team, Role, shoot, State, NewState) :-
     update_player(Team, Role,
                   p(Role, Col, Row, NewStamina), State, TempState),
     TempState = state(T, Score, PA2, PB2, _),
-    % ball moves to goal cell, still "possessed" by shooter
-    % goal detection in check_goal/2 will catch it
+
+    % ball moves to goal cell, still possessed by shooter
+    % for this, goal detection in check_goal/2 will catch it
     NewState = state(T, Score, PA2, PB2, ball(GCol, GRow, Atom)).
 
-%  ---- pass(TMRole) ----
+% pass(TMRole)
 apply_player_action(Team, Role, pass(TMRole), State, NewState) :-
     player_atoms(Team, DefAtom, FwdAtom),
     (Role = defender -> Atom = DefAtom ; Atom = FwdAtom),
@@ -475,25 +416,20 @@ apply_player_action(Team, Role, pass(TMRole), State, NewState) :-
         NewState = state(T, Score, PA2, PB2, ball(IC, IR, IntAtom))
     ).
 
-% ------------------------------------------------------------
-%  GOAL DETECTION AND RESET
-%  A goal is scored when ball is at col 0 or col 9, rows 2-3.
-%  After goal: reset positions, ball to scored-on team's forward,
-%  stamina unchanged, score incremented.
-% ------------------------------------------------------------
-
+%  detect goal then reset pos., score ++ , etc
 check_goal(State, NewState) :-
     State = state(T, SA-SB, _, _, ball(BC, BR, Scorer)),
     goal_cell(BC, BR, ScoringTeam),
     !,
+
     % increment score
     (ScoringTeam = a
     ->  NewSA is SA + 1, NewSB = SB
     ;   NewSA = SA,      NewSB is SB + 1),
+
     % preserve staminas
     State = state(_, _, [p(_,_,_,StamD_A), p(_,_,_,StamF_A)],
                         [p(_,_,_,StamD_B), p(_,_,_,StamF_B)], _),
-    % reset positions, ball to scored-on team's forward
     scored_on_team(ScoringTeam, LosingTeam),
     losing_forward_atom(LosingTeam, FwdAtom),
     half_of_turn(T, Half),
@@ -504,12 +440,12 @@ check_goal(State, NewState) :-
     NewState = state(T, NewSA-NewSB, PA_new, PB_new,
                      ball(FwdCol, FwdRow, FwdAtom)).
 
-check_goal(State, State).   % no goal, state unchanged
+check_goal(State, State). % no goal, state unchanged
 
-goal_cell(0, 2, b).  goal_cell(0, 3, b).   % col 0 = Team B scores
-goal_cell(9, 2, a).  goal_cell(9, 3, a).   % col 9 = Team A scores
+goal_cell(0, 2, b).  goal_cell(0, 3, b).  % col 0 which is for team b score
+goal_cell(9, 2, a).  goal_cell(9, 3, a).  % vice versa
 
-scored_on_team(a, b).   % A scored -> B kicked off
+scored_on_team(a, b).  % A scored, B kicked off
 scored_on_team(b, a).
 
 losing_forward_atom(a, player_2A).
@@ -524,20 +460,18 @@ kickoff_forward_pos(second_half, a, 5, 2).
 kickoff_forward_pos(second_half, b, 6, 3).
 
 reset_players(first_half,
-              StamD_A, StamF_A, StamD_B, StamF_B,
-              [p(defender,3,2,StamD_A), p(forward,5,3,StamF_A)],
-              [p(defender,8,3,StamD_B), p(forward,6,2,StamF_B)]).
+    StamD_A, StamF_A, StamD_B, StamF_B,
+    [p(defender,3,2,StamD_A), p(forward,5,3,StamF_A)],
+    [p(defender,8,3,StamD_B), p(forward,6,2,StamF_B)]).
 reset_players(second_half,
-              StamD_A, StamF_A, StamD_B, StamF_B,
-              [p(defender,3,3,StamD_A), p(forward,5,2,StamF_A)],
-              [p(defender,8,2,StamD_B), p(forward,6,3,StamF_B)]).
+    StamD_A, StamF_A, StamD_B, StamF_B,
+    [p(defender,3,3,StamD_A), p(forward,5,2,StamF_A)],
+    [p(defender,8,2,StamD_B), p(forward,6,3,StamF_B)]).
 
 opponent_team(a, b).
 opponent_team(b, a).
 
-% ------------------------------------------------------------
-%  UPDATE A SINGLE PLAYER IN STATE (pure, no assert)
-% ------------------------------------------------------------
+
 
 update_player(a, defender, NewP,
               state(T, Score, [_|Fwd], PB, Ball),
@@ -555,34 +489,11 @@ update_player(b, forward, NewP,
               state(T, Score, PA, [Def|_], Ball),
               state(T, Score, PA, [Def,NewP], Ball)).
 
-% ------------------------------------------------------------
-%  QUICK TESTS
-%
-%  % Team A forward shoots from (8,3):
-%  ?- S = state(1, 0-0,[p(defender,2,3,100), p(forward,8,3,100)],[p(defender,7,3,100), p(forward,5,3,100)],ball(8,3,player_2A)),apply_team_actions(a, act(hold, shoot), S, S2),display_state(S2).
-%
-%  % Team A forward passes to defender (same row):
-%  ?- S = state(1, 0-0,[p(defender,2,3,100), p(forward,4,3,100)],[p(defender,7,2,100), p(forward,7,4,100)],ball(4,3,player_2A)),apply_team_actions(a, act(hold, pass(defender)), S, S2),display_state(S2).
-%
-%  % Goal scored by Team A:
-%  ?- S = state(1, 0-0,[p(defender,2,3,100), p(forward,8,3,100)],[p(defender,6,3,100), p(forward,5,3,100)],ball(8,3,player_2A)),apply_team_actions(a, act(hold, shoot), S, S2),display_state(S2).
-% ------------------------------------------------------------
 
 
-% ============================================================
-%  Step 4: Priority-List Agent
-% ============================================================
+%  priority list: ordered sequence of actions
 
-% ------------------------------------------------------------
-%  DEFAULT PRIORITY LISTS
-%
-%  Each list is an ordered sequence of actions.
-%  The agent picks the first legal one.
-%  Lists are configured per team per role.
-%  Team B mirrors Team A with left/right swapped.
-% ------------------------------------------------------------
-
-%  Team A
+%  team A
 priority_list(a, forward,  attacking,
     [shoot, pass(defender), contest,
      move(right), move(up), move(down), move(left), hold]).
@@ -599,7 +510,7 @@ priority_list(a, defender, conservative,
     [hold, contest, pass(forward),
      move(left), move(up), move(down), move(right)]).
 
-%  Team B (left/right swapped)
+% team B (left/right swapped)
 priority_list(b, forward,  attacking,
     [shoot, pass(defender), contest,
      move(left), move(up), move(down), move(right), hold]).
@@ -616,14 +527,8 @@ priority_list(b, defender, conservative,
     [hold, contest, pass(forward),
      move(right), move(up), move(down), move(left)]).
 
-% ------------------------------------------------------------
-%  PRIORITY AGENT ACTION SELECTION
-%
-%  priority_action(+Team, +Role, +Preset, +State, -Action)
-%
-%  Walks the priority list and returns the first legal action.
-%  hold is always legal so this always terminates.
-% ------------------------------------------------------------
+
+%  priority agent action selection: returns first legal action
 
 priority_action(Team, Role, Preset, State, Action) :-
     player_atoms(Team, DefAtom, FwdAtom),
@@ -636,26 +541,14 @@ first_legal(Atom, [H|_], State, H) :-
 first_legal(Atom, [_|T], State, Action) :-
     first_legal(Atom, T, State, Action).
 
-% ------------------------------------------------------------
-%  TEAM ACTION FOR PRIORITY AGENT
-%
-%  priority_team_action(+Team, +DefPreset, +FwdPreset,
-%                       +State, -act(DefAct, FwdAct))
-% ------------------------------------------------------------
 
+%  Team action for priority agent
 priority_team_action(Team, DefPreset, FwdPreset, State,
                      act(DefAct, FwdAct)) :-
     priority_action(Team, defender, DefPreset, State, DefAct),
     priority_action(Team, forward,  FwdPreset, State, FwdAct).
 
-% ------------------------------------------------------------
-%  CONFIGURATION
-%
-%  Stores the active preset for each team/role as a fact.
-%  Changed once before game starts via set_preset/3.
-%  Default: Team A attacking/aggressive, Team B attacking/aggressive.
-% ------------------------------------------------------------
-
+% config
 :- dynamic active_preset/3.
 
 active_preset(a, forward,  attacking).
@@ -667,20 +560,14 @@ set_preset(Team, Role, Preset) :-
     retract(active_preset(Team, Role, _)),
     assertz(active_preset(Team, Role, Preset)).
 
-%  Convenience: get team action using active presets
+% get team action using active presets
 priority_team_action_default(Team, State, TeamAct) :-
     active_preset(Team, defender, DefPreset),
     active_preset(Team, forward,  FwdPreset),
     once(priority_team_action(Team, DefPreset, FwdPreset, State, TeamAct)).
 
-% ------------------------------------------------------------
-%  SIMULATE N TURNS WITH TWO PRIORITY AGENTS
-%  (useful for validating state transitions before minimax)
-%
-%  run_priority_game/0  runs a full 30-turn game
-% ------------------------------------------------------------
 
-% Replace run_priority_game/0 and run_priority_turns/2:
+% run_priority_game: runs a full 30-turn game
 run_priority_game :-
     initial_state_first_half(S0),
     format("~n*** FIRST HALF ***~n~n", []),
@@ -709,52 +596,18 @@ run_turns(State, MaxTurn, Final) :-
     S3 = state(T1, Score2, PA2, PB2, Ball2),
     run_turns(S3, MaxTurn, Final).
 
-% ------------------------------------------------------------
-%  QUICK TESTS
-%
-%  % Run a full priority-vs-priority game with defaults:
-%  ?- run_priority_game.
-%
-%  % Check what Team A picks in opening state:
-%  ?- initial_state_first_half(S),priority_team_action_default(a, S, Act),write(Act).
-%
-%  % Switch Team B defender to conservative then run:
-%  ?- set_preset(b, defender, conservative),run_priority_game.
-% ------------------------------------------------------------
 
 
-% ============================================================
-%  Step 5: Evaluation Function (Leaf-Node Heuristic)
-%
-%  Evaluated from Team A's perspective.
-%  Minimax maximizes for A, minimizes for B.
-% ============================================================
+% evaluation func (leaf-node heuristic): minimax maximizes for A, minimizes for B
 
-% ------------------------------------------------------------
-%  TERMINAL EVALUATION
-%  If turn > 30, only score difference matters.
-% ------------------------------------------------------------
-
+% terminal eval: if turn > 30, only score difference matters
 evaluate(State, Value) :-
     State = state(T, _, _, _, _),
     T > 30,
     !,
     eval_score(State, Value).
 
-% ------------------------------------------------------------
-%  NON-TERMINAL EVALUATION
-%
-%  eval = (ScoreA - ScoreB) * 10000
-%       + possession_bonus
-%       + ball_advancement
-%       + shooting_threat
-%       + defensive_pressure
-%       - opponent_pressure
-%       + ball_distance_from_opponents
-%       + forward_positioning
-%       + stamina_advantage
-% ------------------------------------------------------------
-
+% non terminal eval
 evaluate(State, Value) :-
     eval_score(State, ScoreVal),
     eval_possession(State, PossVal),
@@ -767,27 +620,16 @@ evaluate(State, Value) :-
     Value is ScoreVal + PossVal + AdvVal + ShootVal
             + PressVal + BallDistVal + FwdPosVal + StamVal.
 
-% ------------------------------------------------------------
-%  COMPONENT: Score difference * 10000
-% ------------------------------------------------------------
 
 eval_score(state(_, SA-SB, _, _, _), Value) :-
     Value is (SA - SB) * 10000.
 
-% ------------------------------------------------------------
-%  COMPONENT: Possession bonus
-%  +500 if A has ball, -500 if B has ball
-% ------------------------------------------------------------
 
+% +500 if A has ball, -500 if B has ball
 eval_possession(state(_, _, _, _, ball(_, _, Poss)), Value) :-
     team(Poss, Team),
     (Team = a -> Value = 500 ; Value = -500).
 
-% ------------------------------------------------------------
-%  COMPONENT: Ball advancement
-%  A possesses: BallCol * 50
-%  B possesses: -(9 - BallCol) * 50
-% ------------------------------------------------------------
 
 eval_ball_advancement(state(_, _, _, _, ball(BC, _, Poss)), Value) :-
     team(Poss, Team),
@@ -796,12 +638,9 @@ eval_ball_advancement(state(_, _, _, _, ball(BC, _, Poss)), Value) :-
     ;   Value is -((9 - BC) * 50)
     ).
 
-% ------------------------------------------------------------
-%  COMPONENT: Shooting threat
-%  +300 if A's ball-holder has a legal shoot
-%  -300 if B's ball-holder has a legal shoot
-% ------------------------------------------------------------
 
+% +300 if A's ball-holder has a legal shoot
+% -300 if B's ball-holder has a legal shoot
 eval_shooting_threat(State, Value) :-
     State = state(_, _, _, _, ball(_, _, Poss)),
     team(Poss, Team),
@@ -810,12 +649,9 @@ eval_shooting_threat(State, Value) :-
     ;   Value = 0
     ).
 
-% ------------------------------------------------------------
-%  COMPONENT: Defensive/Opponent pressure
-%  +100 per A player adjacent to B ball-holder
-%  -100 per B player adjacent to A ball-holder
-% ------------------------------------------------------------
 
+% +100 per A player adjacent to B ball-holder
+% -100 per B player adjacent to A ball-holder
 eval_pressure(State, Value) :-
     State = state(_, _, PA, PB, ball(_, _, Poss)),
     team(Poss, Team),
@@ -830,19 +666,14 @@ eval_pressure(State, Value) :-
         Value is -(Count * 100)
     ).
 
-%  Count how many players in a player list are adjacent to (Col, Row).
+% count how many players in a player list are adjacent to (col, row).
 count_adjacent_players([], _, _, 0).
 count_adjacent_players([p(_, PC, PR, _)|Rest], Col, Row, Count) :-
     count_adjacent_players(Rest, Col, Row, RestCount),
     Dist is abs(PC - Col) + abs(PR - Row),
     (Dist =:= 1 -> Count is RestCount + 1 ; Count = RestCount).
 
-% ------------------------------------------------------------
-%  COMPONENT: Ball distance from nearest opponent
-%  Manhattan dist from ball to nearest opposing player * 10
-%  Signed: + if A possesses, - if B possesses
-% ------------------------------------------------------------
-
+% ball dist from nearest opponent with signed + - and use manhattan
 eval_ball_dist_opponents(State, Value) :-
     State = state(_, _, PA, PB, ball(BC, BR, Poss)),
     team(Poss, Team),
@@ -853,7 +684,7 @@ eval_ball_dist_opponents(State, Value) :-
         Value is -(MinDist * 10)
     ).
 
-%  Minimum Manhattan distance from (Col, Row) to any player in list.
+% minimum manhattan dist from (col,row) to any player in list
 min_dist_to_players(Col, Row, Players, MinDist) :-
     findall(D,
         (member(p(_, PC, PR, _), Players),
@@ -861,60 +692,19 @@ min_dist_to_players(Col, Row, Players, MinDist) :-
         Dists),
     min_list(Dists, MinDist).
 
-% ------------------------------------------------------------
-%  COMPONENT: Forward positioning
-%  A_forward_col * 20 - (9 - B_forward_col) * 20
-% ------------------------------------------------------------
-
+% forward positioning
 eval_forward_positioning(state(_, _, [_, p(forward, AC, _, _)],
                                      [_, p(forward, BC, _, _)], _), Value) :-
     Value is AC * 20 - (9 - BC) * 20.
 
-% ------------------------------------------------------------
-%  COMPONENT: Stamina advantage
-%  (sum A stamina - sum B stamina) * 2
-% ------------------------------------------------------------
-
+% stamina advantage = (sum A stam - sum B stam)x2
 eval_stamina(state(_, _, [p(_,_,_,SD_A), p(_,_,_,SF_A)],
                          [p(_,_,_,SD_B), p(_,_,_,SF_B)], _), Value) :-
     SumA is SD_A + SF_A,
     SumB is SD_B + SF_B,
     Value is (SumA - SumB) * 2.
 
-% ------------------------------------------------------------
-%  QUICK TESTS
-%
-%  % Evaluate the initial state:
-%  ?- initial_state_first_half(S), evaluate(S, V), write(V).
-%
-%  % Evaluate a state where A is about to shoot:
-%  ?- S = state(5, 1-0,
-%       [p(defender,2,3,100), p(forward,8,3,100)],
-%       [p(defender,6,2,100), p(forward,3,3,100)],
-%       ball(8,3,player_2A)),
-%     evaluate(S, V), write(V).
-%
-%  % Evaluate a terminal state:
-%  ?- S = state(31, 3-1, _, _, ball(5,3,player_2A)),
-%     evaluate(S, V), write(V).
-% ------------------------------------------------------------
-
-
-% ============================================================
-%  Step 6: Minimax with Alpha-Beta Pruning
-%
-%  One "ply" = one team-turn (both players act simultaneously).
-%  Team A maximizes, Team B minimizes.
-%
-%  Two modes:
-%    Mode 1: minimax_vs_priority
-%      - A branches (minimax), B uses priority-list (no branching)
-%    Mode 2: minimax_vs_minimax
-%      - Both teams branch
-%
-%  Default search depth: 4 plies
-% ============================================================
-
+% minimax vs priority mode and minimax vs minimax mode
 :- dynamic search_depth/1.
 search_depth(4).
 
@@ -922,32 +712,24 @@ set_search_depth(D) :-
     retractall(search_depth(_)),
     assertz(search_depth(D)).
 
-% ------------------------------------------------------------
-%  MODE SELECTION
-% ------------------------------------------------------------
 
+% select mode
 :- dynamic play_mode/1.
-play_mode(minimax_vs_priority).   % default
+play_mode(minimax_vs_priority). % default
 
 set_play_mode(Mode) :-
     member(Mode, [minimax_vs_priority, minimax_vs_minimax]),
     retractall(play_mode(_)),
     assertz(play_mode(Mode)).
 
-% ------------------------------------------------------------
-%  TOP-LEVEL: BEST MOVE FOR TEAM A
-%
-%  best_move_a(+State, -BestAct, -BestValue)
-%  Returns the best team action for Team A and its value.
-% ------------------------------------------------------------
-
+% returns best team A action 
 best_move_a(State, BestAct, BestValue) :-
     search_depth(Depth),
     ordered_team_actions(a, State, Actions),
     alpha_beta_max_root(Actions, State, Depth, -999999, 999999,
                         none, _, BestAct, BestValue).
 
-%  Iterate over Team A's actions at the root, tracking best.
+% iterate over team A's actions at the root 
 alpha_beta_max_root([], _, _, _, _, none, _, _, _) :- !, fail.  % no valid actions
 alpha_beta_max_root([], _, _, _, _, BestSoFar, BestValSoFar,
                     BestSoFar, BestValSoFar).
@@ -966,19 +748,16 @@ alpha_beta_max_root([Act|Rest], State, Depth, Alpha, Beta,
         ;   alpha_beta_max_root(Rest, State, Depth, NewAlpha, Beta,
                                 NewBest, NewBestVal, BestAct, BestValue)
         )
-    ;   % Action failed to apply — skip it
+    ;   % action failed to apply so skip it
         alpha_beta_max_root(Rest, State, Depth, Alpha, Beta,
                             BestSoFar, BestValSoFar, BestAct, BestValue)
     ).
 
-% ------------------------------------------------------------
-%  AFTER TEAM A ACTS: TEAM B's TURN
-%
-%  In minimax_vs_priority mode: B uses fixed policy (no branching).
-%  In minimax_vs_minimax mode: B branches with minimization.
-% ------------------------------------------------------------
 
-%  Mode 1: B uses priority-list agent
+% for minimax_vs_priority mode: B uses fixed policy (no branching).
+% but in minimax_vs_minimax mode: B branches with minimization.
+
+% B uses priority-list agent mode
 ab_after_a(minimax_vs_priority, S1, _OrigState, Depth, Alpha, Beta, Val) :-
     once(priority_team_action_default(b, S1, ActB)),
     apply_team_actions(b, ActB, S1, S2),
@@ -986,12 +765,12 @@ ab_after_a(minimax_vs_priority, S1, _OrigState, Depth, Alpha, Beta, Val) :-
     Depth1 is Depth - 1,
     ab_value(S3, Depth1, Alpha, Beta, Val).
 
-%  Mode 2: B branches (minimizer)
+% B branches (minimizer) mode
 ab_after_a(minimax_vs_minimax, S1, _OrigState, Depth, Alpha, Beta, Val) :-
     ordered_team_actions(b, S1, ActionsB),
     alpha_beta_min_list(ActionsB, S1, Depth, Alpha, Beta, 999999, Val).
 
-%  Minimizer iteration for Team B actions.
+% minimizer iteration for team B actions
 alpha_beta_min_list([], _, _, _, _, BestVal, BestVal).
 alpha_beta_min_list([ActB|Rest], S1, Depth, Alpha, Beta, BestSoFar, Val) :-
     (   apply_team_actions(b, ActB, S1, S2),
@@ -1007,13 +786,7 @@ alpha_beta_min_list([ActB|Rest], S1, Depth, Alpha, Beta, BestSoFar, Val) :-
     ;   alpha_beta_min_list(Rest, S1, Depth, Alpha, Beta, BestSoFar, Val)
     ).
 
-% ------------------------------------------------------------
-%  AB_VALUE: recursive evaluation
-%
-%  Base cases: depth 0 or game over (turn > 30) -> evaluate.
-%  Recursive: Team A maximizes, then Team B responds.
-% ------------------------------------------------------------
-
+% recursive eval where base case is depth 0/gameover and recur: team a maximizes then B responds
 ab_value(State, 0, _, _, Val) :-
     !, evaluate(State, Val).
 
@@ -1026,7 +799,7 @@ ab_value(State, Depth, Alpha, Beta, Val) :-
     ordered_team_actions(a, State, ActionsA),
     ab_max_list(ActionsA, State, Depth, Alpha, Beta, -999999, Val).
 
-%  Maximizer iteration for Team A actions.
+% maximizer iteration for team A actions
 ab_max_list([], _, _, _, _, BestVal, BestVal).
 ab_max_list([ActA|Rest], State, Depth, Alpha, Beta, BestSoFar, Val) :-
     (   apply_team_actions(a, ActA, State, S1),
@@ -1041,26 +814,12 @@ ab_max_list([ActA|Rest], State, Depth, Alpha, Beta, BestSoFar, Val) :-
     ;   ab_max_list(Rest, State, Depth, Alpha, Beta, BestSoFar, Val)
     ).
 
-% ------------------------------------------------------------
-%  ADVANCE TURN COUNTER
-% ------------------------------------------------------------
-
+%advance turn counter
 advance_turn(state(T, Score, PA, PB, Ball),
              state(T1, Score, PA, PB, Ball)) :-
     T1 is T + 1.
 
-% ------------------------------------------------------------
-%  ORDERED TEAM ACTIONS (move ordering for alpha-beta)
-%
-%  Generate all legal team actions (Cartesian product of
-%  defender × forward legal actions), then sort by priority:
-%    1. shoot actions first
-%    2. contest actions
-%    3. pass actions
-%    4. move actions
-%    5. hold actions
-% ------------------------------------------------------------
-
+% team actions in order: shoot, contest, pass, move, hold
 ordered_team_actions(Team, State, Ordered) :-
     player_atoms(Team, DefAtom, FwdAtom),
     legal_actions(DefAtom, State, DefActions),
@@ -1077,7 +836,7 @@ ordered_team_actions(Team, State, Ordered) :-
     ;   map_priority_sort(AllActs, Ordered)
     ).
 
-%  Sort team actions by priority score (lower = searched first).
+% sort team actions by priority score (lower = searched first)
 map_priority_sort(Acts, Sorted) :-
     maplist(tag_priority, Acts, Tagged),
     msort(Tagged, SortedTagged),
@@ -1091,7 +850,7 @@ tag_priority(Act, Prio-Act) :-
 
 untag(_-Act, Act).
 
-%  Priority ordering: lower number = higher priority = searched first.
+% priority ordering: lower number = higher priority = searched first
 action_priority(shoot, 0).
 action_priority(contest, 1).
 action_priority(pass(_), 2).
@@ -1099,13 +858,7 @@ action_priority(move(_), 3).
 action_priority(hold, 4).
 action_priority(hold_penalised(_), 5).
 
-% ------------------------------------------------------------
-%  GAME LOOP: MINIMAX GAME
-%
-%  run_minimax_game/0  runs a full 30-turn game
-%  Team A uses minimax, Team B uses whatever play_mode dictates.
-% ------------------------------------------------------------
-
+% game loop for minimax so team A uses minimax and team B uses whetever the playmode is
 run_minimax_game :-
     initial_state_first_half(S0),
     format("~n*** FIRST HALF (Minimax) ***~n~n", []),
@@ -1125,10 +878,12 @@ run_minimax_turns(State, MaxTurn, Final) :-
     State = state(T, _, _, _, _),
     T =< MaxTurn,
     display_state(State),
+    
     % Team A: minimax
     best_move_a(State, ActA, _Val),
     format("  A plays: ~w~n", [ActA]),
     apply_team_actions(a, ActA, State, S1),
+    
     % Team B: depends on mode
     play_mode(Mode),
     team_b_action(Mode, S1, ActB, S2),
@@ -1147,10 +902,7 @@ team_b_action(minimax_vs_minimax, S1, ActB, S2) :-
     best_move_b(S1, ActB, _),
     apply_team_actions(b, ActB, S1, S2).
 
-% ------------------------------------------------------------
-%  BEST MOVE FOR TEAM B (minimizer, used in mode 2)
-% ------------------------------------------------------------
-
+% best move for team B (used in mode 2)
 best_move_b(State, BestAct, BestValue) :-
     search_depth(Depth),
     ordered_team_actions(b, State, Actions),
@@ -1180,58 +932,13 @@ alpha_beta_min_root([ActB|Rest], State, Depth, Alpha, Beta,
                             BestSoFar, BestValSoFar, BestAct, BestValue)
     ).
 
-% ------------------------------------------------------------
-%  QUICK TESTS
-%
-%  % Test minimax move selection (may take a moment):
-%  ?- initial_state_first_half(S), best_move_a(S, Act, Val),
-%     format("Best: ~w  Value: ~w~n", [Act, Val]).
-%
-%  % Run minimax vs priority (depth 2 for speed):
-%  ?- set_search_depth(2), run_minimax_game.
-%
-%  % Run minimax vs priority (depth 4, slower):
-%  ?- set_search_depth(4), run_minimax_game.
-%
-%  % Run minimax vs minimax (depth 2):
-%  ?- set_play_mode(minimax_vs_minimax), set_search_depth(2),
-%     run_minimax_game.
-% ------------------------------------------------------------
-
-
-% ============================================================
-%  BRIDGE LAYER FOR server.pl
-%
-%  server.pl consults this file (via game.pl stub) and calls a
-%  small fixed protocol of predicates each HTTP /action request.
-%  This block implements that protocol on top of the engine
-%  defined above.
-%
-%  Turn model adaptation:
-%    The engine processes both teams per turn (a then b, then T++).
-%    The server's flow is one-action-per-step. We collapse both
-%    teams' actions into a single combined(ActA, ActB) action so
-%    one Unity step == one full engine turn.
-%
-%  Mode mapping (set via set_mode from server.pl):
-%    "ai_vs_ai"     -> minimax_vs_minimax (both teams branch)
-%    "slider_vs_ai" -> minimax_vs_priority (A=minimax, B=priority)
-%
-%  Strategy mapping (set via set_strategy):
-%    aggression in [0..100] for the priority-driven team.
-%      >= 67  : attacking + aggressive
-%      34..66 : attacking + conservative (balanced)
-%      <= 33  : supportive + conservative
-% ============================================================
-
 :- dynamic live_state/1.
 :- dynamic game_event/1.
 :- dynamic game_mode/1.
 :- dynamic strategy_aggression/2.
 :- dynamic kickoff_pending/0.
 
-% ---- INIT / STATE I/O ----
-
+% init
 init_live_state :-
     retractall(live_state(_)),
     retractall(game_event(_)),
@@ -1246,7 +953,6 @@ init_live_state :-
     assertz(play_mode(minimax_vs_minimax)),
     initial_state_first_half(S0),
     assertz(live_state(S0)),
-    %  First step after reset should render the kickoff layout unchanged.
     assertz(kickoff_pending).
 
 current_state(S) :- live_state(S).
@@ -1259,18 +965,13 @@ clear_events :- retractall(game_event(_)).
 
 log_event(E) :- assertz(game_event(E)).
 
-% ---- TERMINAL / TURN ORDER ----
-
+% terminal/turn order
 terminal(state(T, _, _, _, _)) :- T > 30.
 
-%  The team token is opaque to server.pl; we use `round` because
-%  one step covers a whole round (both teams).
 current_team(_, round).
 
-% ---- CHOOSE ACTION ----
 
-%  Kickoff frame: no actions are taken, we just show the reset layout.
-%  This happens on the very first step after init_live_state.
+% kickoff frame: no actions are taken, we just show the reset layout
 choose_action(State, _Team, combined(skipped, skipped)) :-
     kickoff_pending, !,
     State = state(T, SA-SB, _, _, ball(_, _, Poss)),
@@ -1285,12 +986,11 @@ choose_action(State, _Team, combined(ActA, ActB)) :-
     pick_team_actions(Mode, State, ActA, ActB),
     log_agent_choice(Mode, State, ActA, ActB).
 
-%  A goal just happened: score went up for either team.
+% goal just happened: score went up for either team
 goal_occurred(state(_, SA0-SB0, _, _, _), state(_, SA1-SB1, _, _, _)) :-
     (SA1 > SA0 ; SB1 > SB0).
 
-%  Pretty-print each team's action to the server console so the
-%  user can follow what the agents decided on every Unity step.
+% log each team's action 
 log_agent_choice(Mode, state(T, SA-SB, _, _, ball(_, _, Poss)), ActA, ActB) :-
     agent_label(a, Mode, LabelA),
     agent_label(b, Mode, LabelB),
@@ -1308,10 +1008,7 @@ log_agent_choice(Mode, state(T, SA-SB, _, _, ball(_, _, Poss)), ActA, ActB) :-
 agent_label(b, slider_vs_ai, priority) :- !.
 agent_label(_, _,            minimax).
 
-%  Depth is mode-dependent. In minimax_vs_minimax one round expands
-%  both teams (~|A|*|B| combinations), so depth 2 blows up quickly
-%  and the whole game appears frozen. Depth 1 here still gives one
-%  full round of lookahead and keeps each step responsive.
+
 sync_play_mode(slider_vs_ai) :- !,
     retractall(play_mode(_)),
     assertz(play_mode(minimax_vs_priority)),
@@ -1321,7 +1018,7 @@ sync_play_mode(_) :-
     assertz(play_mode(minimax_vs_minimax)),
     set_search_depth(2).
 
-%  ai_vs_ai : both minimax
+% ai vs ai: both minimax
 pick_team_actions(ai_vs_ai, State, ActA, ActB) :- !,
     pick_minimax_a(State, ActA),
     once(apply_team_actions(a, ActA, State, S1)),
@@ -1330,7 +1027,7 @@ pick_team_actions(ai_vs_ai, State, ActA, ActB) :- !,
     ;   pick_minimax_b(S1, ActB)
     ).
 
-%  slider_vs_ai : A = minimax, B = priority list (aggression-driven)
+% slider vs ai : A is minimax, B is priority list (aggression-driven)
 pick_team_actions(slider_vs_ai, State, ActA, ActB) :- !,
     pick_minimax_a(State, ActA),
     once(apply_team_actions(a, ActA, State, S1)),
@@ -1340,7 +1037,7 @@ pick_team_actions(slider_vs_ai, State, ActA, ActB) :- !,
         once(priority_team_action_default(b, S1, ActB))
     ).
 
-%  Unknown mode: full minimax fallback.
+% unknown mode ->  full minimax fallback
 pick_team_actions(_, State, ActA, ActB) :-
     pick_minimax_a(State, ActA),
     once(apply_team_actions(a, ActA, State, S1)),
@@ -1359,26 +1056,21 @@ pick_minimax_b(State, Act) :-
     ; Act = act(hold, hold)
     ).
 
-% ---- APPLY ACTION ----
 
-%  Kickoff frame: retract the flag, return the state unchanged, emit
-%  a 'kickoff' event so Unity lingers on this layout.
+% kickoff frame: retract the flag, return the state unchanged, emit
 apply_action(State, _Team, _Action, NewState) :-
     retract(kickoff_pending), !,
     NewState = State,
     log_event(event{type:"kickoff"}).
 
-%  A already scored during choose_action's look-ahead, so B was skipped.
-%  S1 (after A) is the post-goal reset layout; advance the turn and (if
-%  applicable) swap to the half-time layout, then emit 'kickoff'.
+% A already scored during choose_action's look-ahead, so B was skipped
 apply_action(State, _Team, combined(ActA, skipped), NewState) :- !,
     once(apply_team_actions(a, ActA, State, S1)),
     advance_turn(S1, S2),
     maybe_halftime(S2, NewState),
     log_event(event{type:"kickoff"}).
 
-%  Normal round: both teams act, advance turn, maybe halftime-swap.
-%  A kickoff event fires when B scored or the half-time swap hit.
+% Normal round (both teams act, advance turn, maybe halftime-swap)
 apply_action(State, _Team, combined(ActA, ActB), NewState) :-
     once(apply_team_actions(a, ActA, State, S1)),
     once(apply_team_actions(b, ActB, S1, S2)),
@@ -1391,13 +1083,12 @@ apply_action(State, _Team, combined(ActA, ActB), NewState) :-
     ;   true
     ).
 
-%  When the turn rolls over to 16, reset positions but keep score.
+% when turn becomes 16, reset positions but keep score
 maybe_halftime(state(16, Score, _, _, _), S16) :- !,
     initial_state_second_half(Score, S16).
 maybe_halftime(S, S).
 
-% ---- STRATEGY -> PRIORITY PRESET ----
-
+% strat -> priority reset
 aggression_presets(Agg, attacking,  aggressive)  :- Agg >= 67, !.
 aggression_presets(Agg, attacking,  conservative) :- Agg >= 34, !.
 aggression_presets(_,   supportive, conservative).
@@ -1414,7 +1105,7 @@ sync_team_presets(Team) :-
     assertz(active_preset(Team, forward,  FwdP)),
     assertz(active_preset(Team, defender, DefP)).
 
-% ---- EVENTS ----
+% events
 
 emit_events(state(_, OldSA-OldSB, _, _, _),
             state(NewT, NewSA-NewSB, _, _, _)) :-
@@ -1423,13 +1114,7 @@ emit_events(state(_, OldSA-OldSB, _, _, _),
     ( NewT =:= 16   -> log_event(event{type:"half_time"})      ; true ),
     ( NewT  >  30   -> log_event(event{type:"full_time"})      ; true ).
 
-% ---- JSON RESPONSE ----
-
-%  Player atoms Unity keys on:
-%    player_1A = Team A defender    player_2A = Team A forward
-%    player_1B = Team B defender    player_2B = Team B forward
-%
-%  Grid is 10x6; PrologClient.cs divides by 20, so emit Col*20, Row*20.
+% json res
 
 build_game_state(Response) :-
     current_state(state(_, SA-SB, PA, PB, ball(BC, BR, Poss))),

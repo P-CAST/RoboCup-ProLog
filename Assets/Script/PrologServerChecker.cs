@@ -40,7 +40,7 @@ public class PrologServerChecker : MonoBehaviour
 
         yield return request.SendWebRequest();
 
-        // Server not running at all
+        // server not running at all
         if (request.result != UnityWebRequest.Result.Success)
         {
             SetStatus("Not Running", Color.red);
@@ -49,7 +49,7 @@ public class PrologServerChecker : MonoBehaviour
 
         string responseText = request.downloadHandler.text;
 
-        // Empty / invalid response
+        // invalid response
         if (string.IsNullOrEmpty(responseText))
         {
             SetStatus("Not Running", Color.red);
@@ -68,14 +68,14 @@ public class PrologServerChecker : MonoBehaviour
             yield break;
         }
 
-        // Server running but not initialized
+        // server running but not initialized
         if (state == null || state.players == null)
         {
             SetStatus("Not Initialized", Color.yellow);
         }
         else
         {
-            // Fully ready
+            // fully ready
             SetStatus("Ready", Color.green);
         }
     }
