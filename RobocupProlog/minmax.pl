@@ -1,32 +1,6 @@
-% ============================================================
-%  RoboCup Prolog Simulation
-%  Step 1: State Representation & Grid Display
-% ============================================================
+% init state
 
-% ------------------------------------------------------------
-%  STATE TERM STRUCTURE
-%
-%  state(Turn, ScoreA-ScoreB, PlayersA, PlayersB, Ball)
-%
-%  PlayersA = [p(defender, Col, Row, Stamina),
-%              p(forward,  Col, Row, Stamina)]
-%
-%  PlayersB = [p(defender, Col, Row, Stamina),
-%              p(forward,  Col, Row, Stamina)]
-%
-%  Ball = ball(Col, Row, Possessor)
-%  Possessor in {player_1A, player_2A, player_1B, player_2B}
-%
-%  Grid: 10 cols (0-9), 6 rows (0-5)
-%  Team A defends col 0 rows 2-3, attacks right (col 9)
-%  Team B defends col 9 rows 2-3, attacks left  (col 0)
-% ------------------------------------------------------------
-
-% ------------------------------------------------------------
-%  INITIAL STATE
-% ------------------------------------------------------------
-
-%  First half: ball with player_2A (Team A forward) at (5,3)
+% first half: ball with player_2A (which is the team A forward) at (5,3)
 initial_state_first_half(State) :-
     State = state(
         1,
@@ -36,7 +10,7 @@ initial_state_first_half(State) :-
         ball(5, 3, player_2A)
     ).
 
-%  Second half: ball with player_2B (Team B forward) at (6,3)
+% second half: ball with player_2B (team B forward) at (6,3)
 initial_state_second_half(ScoreA-ScoreB, State) :-
     State = state(
         16,
@@ -46,24 +20,12 @@ initial_state_second_half(ScoreA-ScoreB, State) :-
         ball(6, 3, player_2B)
     ).
 
-% ------------------------------------------------------------
-%  GRID DISPLAY
-%
-%  Renders a 10x6 grid (col 0-9, row 0-5).
-%  Row 0 is the top line printed first.
-%
-%  Cell contents (priority order if overlap):
-%    [1A] player_1A (Team A defender)
-%    [2A] player_2A (Team A forward)
-%    [1B] player_1B (Team B defender)
-%    [2B] player_2B (Team B forward)
-%    [GA] goal cell for Team A (col 0, rows 2-3)
-%    [GB] goal cell for Team B (col 9, rows 2-3)
-%    [ . ] empty
-%
-%  Ball is shown as lowercase suffix on possessor cell,
-%  e.g. "2A*" means player_2A has the ball.
-% ------------------------------------------------------------
+% grid display: a 10x6 grid (cols are 0-9 & rows 0-5)
+% players 1A, 1B are defender and players 2A, 2B are forward 
+% GA is goal for team A which is at col 0 and rows 2-3
+% GB is goal for team B which is at col 9 and rows 2-3
+%  ball is shown as lowercase suffix on possessor cell: Example: "2A*" means player_2A has the ball
+
 
 display_state(State) :-
     State = state(Turn, ScoreA-ScoreB, PlayersA, PlayersB, Ball),
@@ -92,9 +54,9 @@ print_cell(PlayersA, PlayersB, Ball, Row, Col) :-
     cell_content(Col, Row, PlayersA, PlayersB, Ball, Content),
     format("~w ", [Content]).
 
-%  Determine display content for a cell.
-%  Priority: players > goals > empty.
-%  Ball marker (*) appended to possessor's cell.
+
+%  priority for cell content: players > goals > empty.
+%  * is appended to possessor cell.
 
 cell_content(Col, Row, PlayersA, _PlayersB, Ball, Content) :-
     PlayersA = [p(defender, Col, Row, _) | _],
@@ -124,108 +86,75 @@ cell_content(9, Row, _, _, _, '[GB ]') :-
 
 cell_content(_, _, _, _, _, '[.  ]').
 
-% ------------------------------------------------------------
-%  HELPER: numlist/3  (built-in in SWI-Prolog; defined here
-%  as a fallback for other Prolog systems)
-% ------------------------------------------------------------
+
 
 :- if(\+ current_predicate(numlist/3)).
 numlist(L, H, []) :- L > H, !.
 numlist(L, H, [L|T]) :- L =< H, L1 is L + 1, numlist(L1, H, T).
 :- endif.
 
-% ------------------------------------------------------------
-%  QUICK TEST
-%  ?- initial_state_first_half(S), display_state(S).
-% ------------------------------------------------------------
-
-
-% ============================================================
-%  Step 2: Legal Action Generation
-% ============================================================
-
-% ------------------------------------------------------------
-%  PLAYER LOOKUP HELPERS
-%
-%  Extract a player's data from state by atom identity.
-%  player_1A = Team A defender, player_2A = Team A forward
-%  player_1B = Team B defender, player_2B = Team B forward
-% ------------------------------------------------------------
-
+% in this portion, extract the player data
 player_data(player_1A, state(_, _, [P|_], _, _), P).
 player_data(player_2A, state(_, _, [_,P], _, _), P).
 player_data(player_1B, state(_, _, _, [P|_], _), P).
 player_data(player_2B, state(_, _, _, [_,P], _), P).
 
-%  Which team does a player atom belong to?
+% assign team
 team(player_1A, a).  team(player_2A, a).
 team(player_1B, b).  team(player_2B, b).
 
-%  Role of a player atom.
+% role of a player atom
 role(player_1A, defender). role(player_2A, forward).
 role(player_1B, defender). role(player_2B, forward).
 
-%  Teammate atom given a player atom.
+% teammate atom given a player atom.
 teammate(player_1A, player_2A). teammate(player_2A, player_1A).
 teammate(player_1B, player_2B). teammate(player_2B, player_1B).
 
-%  Opponent atoms for a given player atom.
+% opponent atoms for a given player atom.
 opponents(player_1A, [player_1B, player_2B]).
 opponents(player_2A, [player_1B, player_2B]).
 opponents(player_1B, [player_1A, player_2A]).
 opponents(player_2B, [player_1A, player_2A]).
 
-%  Which role atom does the teammate have?
+% which role does the teammate have
 teammate_role(Player, Role) :-
     teammate(Player, TM),
     role(TM, Role).
 
-% ------------------------------------------------------------
-%  GRID BOUNDS
-% ------------------------------------------------------------
 
 in_bounds(Col, Row) :-
     Col >= 0, Col =< 9,
     Row >= 0, Row =< 5.
 
-% ------------------------------------------------------------
-%  DIRECTION -> DELTA
-% ------------------------------------------------------------
-
+%  direction -> delta
 dir_delta(up,    0, -1).
 dir_delta(down,  0,  1).
 dir_delta(left, -1,  0).
 dir_delta(right, 1,  0).
 
-% ------------------------------------------------------------
-%  STAMINA COST FOR MOVE
-%  Ball carrier pays 8, non-carrier pays 3.
-% ------------------------------------------------------------
 
+%  stamina cost to move
 move_cost(Player, State, Cost) :-
     State = state(_, _, _, _, ball(_, _, Player)),
     !,
     Cost = 8.
 move_cost(_, _, 3).
 
-% ------------------------------------------------------------
-%  ADJACENCY (Manhattan distance = 1)
-% ------------------------------------------------------------
 
+% adjacency where manhattan dist. is 1
 adjacent(C1, R1, C2, R2) :-
     Dist is abs(C1 - C2) + abs(R1 - R2),
     Dist =:= 1.
 
-% ------------------------------------------------------------
-%  GOAL CELLS
-%  Team A attacks right  -> goal at col 9, rows 2-3
-%  Team B attacks left   -> goal at col 0, rows 2-3
-% ------------------------------------------------------------
 
+%  team A attacks the right goal which at col 9, rows 2-3
+%  team B is vice versa but at col 0
 attacking_goal_cells(a, [goal(9,2), goal(9,3)]).
 attacking_goal_cells(b, [goal(0,2), goal(0,3)]).
 
-%  Nearest goal cell (Manhattan distance) for a player.
+
+% nearest goal cell (manhattan distance) for a player
 nearest_goal_cell(Player, Col, Row, GCol, GRow) :-
     team(Player, Team),
     attacking_goal_cells(Team, Goals),
