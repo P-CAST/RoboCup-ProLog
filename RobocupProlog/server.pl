@@ -19,7 +19,7 @@ handle_action(Request) :-
     reply_json_dict(Response),
     clear_events.
 
-% ============== STEP ==============
+
 process_action("step", Response) :-
     current_state(State),
     ( terminal(State) ->
@@ -33,12 +33,11 @@ process_action("step", Response) :-
     ),
     build_game_state(Response).
 
-% ============== RESET ==============
+
 process_action("reset", Response) :-
     init_live_state,
     build_game_state(Response).
 
-% ============== SET MODE ==============
 process_action("set_mode", Dict, _{status: "ok"}) :-
     Mode = Dict.get(mode),
     retractall(game_mode(_)),
@@ -50,7 +49,6 @@ process_action("set_mode", Dict, _{status: "ok"}) :-
         assertz(game_mode(ai_vs_ai))
     ).
 
-% ============== SET STRATEGY ==============
 process_action("set_strategy", Dict, _{status: "ok"}) :-
     TeamStr = Dict.get(team),
     Agg     = Dict.get(aggression),
